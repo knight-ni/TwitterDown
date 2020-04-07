@@ -45,7 +45,7 @@ def clean_file(path, ext):
             os.remove(infile)
 
 
-def merge(flist, downdir, filename):
+def merge(flist, exepath, downdir, filename):
     idxfile = downdir + '\\' + 'index.tmp'
     with open(idxfile, 'w') as f:
         f.write('file \'' + '\'\nfile \''.join(sorted(set(flist), key=lambda flist: flist[-8:-3])) + '\'')
@@ -53,7 +53,7 @@ def merge(flist, downdir, filename):
     if os.path.exists(fullfile):
         os.remove(fullfile)
     else:
-        ff = FFmpeg(executable='D:\\Program Files (x86)\\YouKu\\YoukuClient\\nplayer64\\ffmpeg.exe', inputs={downdir + r'\index.tmp': '-f concat -safe 0 '},
+        ff = FFmpeg(executable=exepath, inputs={downdir + r'\index.tmp': '-f concat -safe 0 '},
                     outputs={fullfile: '-c copy '})
         ff.run()
         clean_file(downdir, ['ts', 'tmp'])

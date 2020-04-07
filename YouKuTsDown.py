@@ -139,20 +139,22 @@ class YouKuTsDown:
                 print('\n下载完成,开始合并...')
         return 0
 
-    def merge_file(self, downdir, filename):
-        merge(self.lth, downdir, filename)
+    def merge_file(self, exepath, downdir, filename):
+        merge(self.lth, exepath, downdir, filename)
 
 
 if __name__ == "__main__":
-    down_load_dir = "E:\\download_test"
+    down_load_dir = 'E:\\download_test'
+    mmpegpath = 'D:\\Program Files (x86)\\YouKu\\YoukuClient\\nplayer64\\ffmpeg.exe'
     fmt = 'mp4'
     thread = 20
     timeout = 10
+    filename = 'testfile.mp4'
     vurl = [
-         'https://v.youku.com/v_show/id_XMzQzMzY3MjIw.html?spm=a2hbt.13141534.0.13141534&s=e7b6f228972211e0a046'
+         'https://v.youku.com/v_show/id_XMzc2NzcyMDc2.html?spm=a2hcb.12523958.m_9274_c_23571.d_4&s=3b285e307fb511e19194&scm=20140719.manual.9274.show_3b285e307fb511e19194'
          ]
     td = YouKuTsDown(down_load_dir)
     tsurl = td.get_ts_address(vurl[0], fmt)
     td.batch_down(tsurl, down_load_dir, thread, timeout)
-    td.merge_file(down_load_dir, 'testfile.mp4')
+    td.merge_file(mmpegpath, down_load_dir, filename)
 
