@@ -96,20 +96,25 @@ class YouKuTsDown:
 
     #@retry(wait_fixed=5)
     def download_file(self, ts, filename, tout):
+        sum = 0
         if ts not in self.lth:
             self.lth.append(filename)
         try:
+            res = requests.get(ts, stream=True)
+            res.raise_for_status()
             ts = self.opener.open(ts, timeout=tout)
         except Exception as e:
             print(e)
         size = ts.headers["Content-Length"]
         with open(filename, 'wb') as f:
-            content = ts.read()
-            if size and not size == str(len(content)):
-                raise EOFError
-            else:
-                f.write(content)
-                f.flush()
+            for chunk in res.iter_content(chunk_size=4096000):
+                if chunk:
+                    f.write(chunk)
+                    f.flush()
+                    sum += len(chunk)
+                    print(str(sum) + '/' + size)
+        if size and not size == str(sum):
+            raise EOFError
         return filename
 
     def batch_down(self, url, mydir, cnt, tout):
@@ -153,7 +158,7 @@ if __name__ == "__main__":
     filename = 'testfile.mp4'
     quality = 'hdv'
     vurl = [
-         'https://v.youku.com/v_show/id_XMzc2NzcyMDc2.html?spm=a2hcb.12523958.m_9274_c_23571.d_4&s=3b285e307fb511e19194&scm=20140719.manual.9274.show_3b285e307fb511e19194'
+         'https://v.youku.com/v_show/id_XNDUyMDA3NzMwOA==.html?spm=a2hcb.12675304.m_7182_c_14738.d_4&s=cbba934b14f747049187&scm=20140719.rcmd.7182.show_cbba934b14f747049187'
          ]
     td = YouKuTsDown(down_load_dir)
     ul = td.get_ts_address(vurl[0], quality, fmt)
