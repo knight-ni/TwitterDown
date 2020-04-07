@@ -29,7 +29,7 @@ class YouKuTsDown:
         return doc
 
     @retry
-    def get_ts_address(self, url, form):
+    def get_ts_address(self, url, quality, form):
         m3url = ''
         vid = re.findall(r'id_(.+)\.html.+', url)
         # 获取证书
@@ -68,16 +68,17 @@ class YouKuTsDown:
         streams = r_j.get('data').get('stream')
 
         for stream in streams:
+            m3url = ''
+            cdurl = ''
             m3u8_url = stream.get('m3u8_url')
-            if form in m3u8_url and 'hd2' in m3u8_url:
-                m3url = m3u8_url
-            elif form in m3u8_url and 'hd' in m3u8_url:
+            if form in m3u8_url and quality in m3u8_url:
                 m3url = m3u8_url
             else:
                 m3url = m3u8_url
-            #cdn_url = stream.get('segs')[0].get('cdn_url')
-            #print(cdn_url)
-        return m3url
+            cdn_url = stream.get('segs')[0].get('cdn_url')
+            if form in cdn_url:
+                cdurl = cdn_url
+        return [m3url, cdurl]
 
 
     def get_ts_lst(self, url):
@@ -93,7 +94,7 @@ class YouKuTsDown:
                 else:
                     yield file_line[index + 1]
 
-    @retry(wait_fixed=5)
+    #@retry(wait_fixed=5)
     def download_file(self, ts, filename, tout):
         if ts not in self.lth:
             self.lth.append(filename)
@@ -150,11 +151,15 @@ if __name__ == "__main__":
     thread = 20
     timeout = 10
     filename = 'testfile.mp4'
+    quality = 'hdv'
     vurl = [
          'https://v.youku.com/v_show/id_XMzc2NzcyMDc2.html?spm=a2hcb.12523958.m_9274_c_23571.d_4&s=3b285e307fb511e19194&scm=20140719.manual.9274.show_3b285e307fb511e19194'
          ]
     td = YouKuTsDown(down_load_dir)
-    tsurl = td.get_ts_address(vurl[0], fmt)
-    td.batch_down(tsurl, down_load_dir, thread, timeout)
-    td.merge_file(mmpegpath, down_load_dir, filename)
+    ul = td.get_ts_address(vurl[0], quality, fmt)
+    if ul[1]:
+        td.download_file(ul[1], down_load_dir + '\\' + filename, timeout)
+    else:
+        td.batch_down(ul[0], down_load_dir, thread, timeout)
+        td.merge_file(mmpegpath, down_load_dir, filename)
 
