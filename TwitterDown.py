@@ -71,7 +71,9 @@ def save_cookie():
         driver.close()
 
 
-def cap_m3u8(chrome_path, baseurl):
+def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
+    if not chrome_path or not os.path.exists(chrome_path):
+        raise RuntimeError('Invalid Chrome Driver Path.')
     driver = None
     m3u8_add = None
     caps = DesiredCapabilities.CHROME
@@ -247,7 +249,9 @@ def get_resp(opener, url):
     return doc
 
 
-def merge(flist, exepath, downdir, fname):
+def merge(flist, downdir, fname, exepath = os.getcwd() + '\\ffmpeg-win64-static\\bin\\ffmpeg.exe'):
+    if not exepath or not os.path.exists(exepath):
+        raise RuntimeError('Invalid MMPEG Path.')
     idxfile = downdir + '\\' + 'index.tmp'
     with open(idxfile, 'w') as f:
         f.write('file \'' + '\'\nfile \''.join(sorted(set(flist), key=lambda x: flist[-8:-3])) + '\'')
@@ -274,15 +278,15 @@ def generate_random_str(randomlength):
 if __name__ == "__main__":
     play_url = 'https://twitter.com/Mike28108429/status/1252143714777968641'
     download_dir = 'E:\\download_test'
-    mmpeg_path = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
-    chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
+    # = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
+    #chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
     #promod = True
     thread = 20
     timeout = 1
     filename = generate_random_str(randomlength=20) + '.mp4'
     opener = set_opener()
-    m3u8_url = cap_m3u8(chrome_path, play_url)[0]
+    m3u8_url = cap_m3u8(play_url)[0]
     real_m3u8 = m3u8_analyze(m3u8_url)
     flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
-    merge(flst, mmpeg_path, download_dir, filename)
+    merge(flst, download_dir, filename)
 
