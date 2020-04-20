@@ -121,9 +121,8 @@ def m3u8_analyze(url):
     return m3u8_add
 
 
-def get_ts_lst(url):
+def get_ts_lst(opener, url):
     tslst = []
-    opener = set_opener()
     doc = get_resp(opener, url)
     file_line = doc.split("\n")
     for index, line in enumerate(file_line):  # 第二层
@@ -140,8 +139,7 @@ def get_ts_lst(url):
 
 
 @retry
-def download_file(ts, fname, tout):
-    opener = set_opener()
+def download_file(opener, ts, fname, tout):
     ssize = 0
     res = ''
     if ts not in lth:
@@ -165,7 +163,7 @@ def download_file(ts, fname, tout):
     return fname
 
 
-def batch_down(url, mydir, cnt, tout, promode):
+def batch_down(opener, url, mydir, cnt, tout, promode):
     if promode:
         backth = 2
     else:
@@ -174,7 +172,7 @@ def batch_down(url, mydir, cnt, tout, promode):
     if not os.path.exists(mydir):
         os.makedirs(mydir)
     else:
-        for ts in get_ts_lst(url):
+        for ts in get_ts_lst(opener, url):
             while threading.active_count() >= cnt:
                 for i in range(tout, 0, -1):
                     print('\r达到最大线程,进入等待计时,剩余 %s 秒!' % str(i).zfill(2), end='')
@@ -186,7 +184,7 @@ def batch_down(url, mydir, cnt, tout, promode):
             else:
                 tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
                 filepath = mydir + '\\' + tsname
-                t = threading.Thread(target=download_file, args=(ts, filepath, tout,))
+                t = threading.Thread(target=download_file, args=(opener, ts, filepath, tout,))
                 t.start()
                 print("Downloading File: " + filepath)
                 ath.append(t)
@@ -267,12 +265,13 @@ if __name__ == "__main__":
     download_dir = 'E:\\download_test'
     mmpeg_path = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
     chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
-    promod = True
-    fmt = 'mp4'
-    thread = 10
+    #promod = True
+    promod = False
+    thread = 20
     timeout = 1
     filename = 'testfile.mp4'
+    opener = set_opener()
     m3u8_url = cap_m3u8(chrome_path, play_url)[0]
     real_m3u8 = m3u8_analyze(m3u8_url)
-    flst = batch_down(real_m3u8, download_dir, thread, timeout, promod)
+    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promod)
     merge(flst, mmpeg_path, download_dir, filename)
