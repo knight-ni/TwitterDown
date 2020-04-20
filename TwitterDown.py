@@ -18,7 +18,6 @@ from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
-import uuid
 
 lth = []
 
