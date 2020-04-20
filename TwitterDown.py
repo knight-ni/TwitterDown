@@ -5,6 +5,7 @@ import random
 import shutil
 import string
 import time
+from decimal import Decimal
 from http import cookiejar
 from urllib import request
 from ffmpy3 import FFmpeg
@@ -20,6 +21,7 @@ import requests
 import threading
 
 lth = []
+fth = []
 
 
 def clean_dir(downdir):
@@ -101,7 +103,7 @@ def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
             pass
         while not m3u8_add:
             logs = [json.loads(log['message'])['message']['params'].get('request') for log in driver.get_log('performance')]
-            m3u8_add = [x.get('url') for x in logs if x and 'm3u8' in x.get('url') and 'tag' in x.get('url')]
+            m3u8_add = [x.get('url') for x in logs if x and 'm3u8' in x.get('url') in x.get('url')]
         return m3u8_add
     finally:
         driver.close()
@@ -162,7 +164,9 @@ def download_file(opener, ts, fname, tout):
                 ssize += len(chunk)
     if size and not int(size) == ssize:
         print('EOFError,Download Again...\n')
-        raise EOFError
+        raise
+    else:
+        fth.append(fname)
     return fname
 
 
@@ -175,12 +179,14 @@ def batch_down(opener, url, mydir, cnt, tout, promode=False):
     if not os.path.exists(mydir):
         os.makedirs(mydir)
     else:
-        for ts in get_ts_lst(opener, url):
+        tslst = get_ts_lst(opener, url)
+        for ts in tslst:
             while threading.active_count() >= cnt:
                 for i in range(tout, 0, -1):
-                    print('\r达到最大线程,进入等待计时,剩余 %s 秒!' % str(i).zfill(2), end='')
+                    gen_process(len(fth), len(tslst))
+                    print('\r达到最大线程,进入等待计时,剩余%s秒!\n' % str(i).zfill(2), end='')
                     time.sleep(1)
-                print('\r{:^5}'.format('开始下载！'))
+                print('\r{:^5}'.format('继续下载！'))
                 for x in ath:
                     x.join()
                 ath = []
@@ -189,14 +195,20 @@ def batch_down(opener, url, mydir, cnt, tout, promode=False):
                 filepath = mydir + '\\' + tsname
                 t = threading.Thread(target=download_file, args=(opener, ts, filepath, tout,))
                 t.start()
-                print("Downloading File: " + filepath)
+                #print("Downloading File: " + filepath)
                 ath.append(t)
         while threading.active_count() > backth:
-            print('\r等待线程工作,剩余线程数 %s ' % str(threading.active_count()).zfill(2), end='')
-            time.sleep(0.5)
+            gen_process(len(fth), len(tslst))
+            print('\r等待线程工作,剩余线程数%s\n' % str(threading.active_count()).zfill(2), end='')
+            time.sleep(1)
         else:
             print('\n下载完成,开始合并...')
     return lth
+
+
+def gen_process(cur, all):
+    pro = Decimal(cur*100/all).quantize(Decimal("0.00"))
+    print(f'{pro}%')
 
 
 def ungzip(data):
@@ -276,7 +288,7 @@ def generate_random_str(randomlength):
 
 
 if __name__ == "__main__":
-    play_url = 'https://twitter.com/Mike28108429/status/1252143714777968641'
+    play_url = ''
     download_dir = 'E:\\download_test'
     # = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
     #chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
