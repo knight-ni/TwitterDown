@@ -1,7 +1,9 @@
 # -*- coding:'utf-8' -*-
 import os
 import json
+import random
 import shutil
+import string
 import time
 from http import cookiejar
 from urllib import request
@@ -16,6 +18,7 @@ from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
+import uuid
 
 lth = []
 
@@ -156,14 +159,13 @@ def download_file(opener, ts, fname, tout):
                 f.write(chunk)
                 f.flush()
                 ssize += len(chunk)
-                # print(str(ssize) + '/' + size)
-    if size and not size == str(ssize):
+    if size and not int(size) == ssize:
         print('EOFError,Download Again...\n')
         raise EOFError
     return fname
 
 
-def batch_down(opener, url, mydir, cnt, tout, promode):
+def batch_down(opener, url, mydir, cnt, tout, promode=False):
     if promode:
         backth = 2
     else:
@@ -260,18 +262,28 @@ def merge(flist, exepath, downdir, fname):
     return 0
 
 
+def generate_random_str(randomlength):
+    '''
+    string.digits = 0123456789
+    string.ascii_letters = 26个小写,26个大写
+    '''
+    str_list = random.sample(string.digits + string.ascii_letters, randomlength)
+    random_str = ''.join(str_list)
+    return random_str
+
+
 if __name__ == "__main__":
-    play_url = 'https://twitter.com/Huawei/status/1251113497913487360'
+    play_url = 'https://twitter.com/Mike28108429/status/1252143714777968641'
     download_dir = 'E:\\download_test'
     mmpeg_path = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
     chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
     #promod = True
-    promod = False
     thread = 20
     timeout = 1
-    filename = 'testfile.mp4'
+    filename = generate_random_str(randomlength=20) + '.mp4'
     opener = set_opener()
     m3u8_url = cap_m3u8(chrome_path, play_url)[0]
     real_m3u8 = m3u8_analyze(m3u8_url)
-    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promod)
+    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
     merge(flst, mmpeg_path, download_dir, filename)
+
