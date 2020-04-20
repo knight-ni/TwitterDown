@@ -69,21 +69,23 @@ def save_cookie():
         driver.close()
 
 
-def cap_m3u8(baseurl):
+def cap_m3u8(chrome_path, baseurl):
     driver = None
-    # server = None
+    m3u8_add = None
     caps = DesiredCapabilities.CHROME
     caps['loggingPrefs'] = {'performance': 'ALL'}
     chrome_options = Options()
     chrome_options.add_argument('--ignore-certificate-errors')
     chrome_options.add_experimental_option('w3c', False)
-    #chrome_options.add_argument('--headless')
+    chrome_options.add_argument('lang=zh_CN.UTF-8')
+    chrome_options.add_argument('user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.113 Safari/537.36"')
+    chrome_options.add_argument('--headless')
     try:
-        driver = webdriver.Chrome(executable_path=os.getcwd() + "\\venv\\Lib\\site-packages\\chromedriver.exe",
+        driver = webdriver.Chrome(executable_path=chrome_path,
                                   options=chrome_options, desired_capabilities=caps)
         driver.get(baseurl)
         try:
-            element = WebDriverWait(driver, 10).until(
+            element = WebDriverWait(driver, 5).until(
                 ec.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div['
                                                           '1]/div/div/div/section/div/div/div/div['
                                                           '1]/div/div/div/article/div/div[3]/div[2]/div/div/div['
@@ -93,12 +95,9 @@ def cap_m3u8(baseurl):
             element.click()
         except Exception:
             pass
-        time.sleep(15)
-        # WebDriverWait(driver, 20).until(
-        #     ec.presence_of_element_located((By.XPATH, '/html/body/div[3]/div'))
-        # )
-        logs = [json.loads(log['message'])['message']['params'].get('request') for log in driver.get_log('performance')]
-        m3u8_add = [x.get('url') for x in logs if x and 'm3u8' in x.get('url') and 'tag' in x.get('url')]
+        while not m3u8_add:
+            logs = [json.loads(log['message'])['message']['params'].get('request') for log in driver.get_log('performance')]
+            m3u8_add = [x.get('url') for x in logs if x and 'm3u8' in x.get('url') and 'tag' in x.get('url')]
         return m3u8_add
     finally:
         driver.close()
@@ -166,14 +165,18 @@ def download_file(ts, fname, tout):
     return fname
 
 
-def batch_down(url, mydir, cnt, tout):
+def batch_down(url, mydir, cnt, tout, promode):
+    if promode:
+        backth = 2
+    else:
+        backth = 1
     ath = []
     if not os.path.exists(mydir):
         os.makedirs(mydir)
     else:
         for ts in get_ts_lst(url):
             while threading.active_count() >= cnt:
-                for i in range(cnt, -1, -1):
+                for i in range(tout, 0, -1):
                     print('\r达到最大线程,进入等待计时,剩余 %s 秒!' % str(i).zfill(2), end='')
                     time.sleep(1)
                 print('\r{:^5}'.format('开始下载！'))
@@ -187,9 +190,9 @@ def batch_down(url, mydir, cnt, tout):
                 t.start()
                 print("Downloading File: " + filepath)
                 ath.append(t)
-        while threading.active_count() > 1:
+        while threading.active_count() > backth:
             print('\r等待线程工作,剩余线程数 %s ' % str(threading.active_count()).zfill(2), end='')
-            time.sleep(5)
+            time.sleep(0.5)
         else:
             print('\n下载完成,开始合并...')
     return lth
@@ -260,14 +263,16 @@ def merge(flist, exepath, downdir, fname):
 
 
 if __name__ == "__main__":
-    play_url = 'https://twitter.com/dbxx419/status/1251503488137220096'
+    play_url = 'https://twitter.com/Huawei/status/1251113497913487360'
     download_dir = 'E:\\download_test'
-    mmpeg_path = 'D:\\Program Files (x86)\\YouKu\\YoukuClient\\nplayer64\\ffmpeg.exe'
+    mmpeg_path = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
+    chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
+    promod = True
     fmt = 'mp4'
     thread = 10
-    timeout = 5
+    timeout = 1
     filename = 'testfile.mp4'
-    m3u8_url = cap_m3u8(play_url)[0]
+    m3u8_url = cap_m3u8(chrome_path, play_url)[0]
     real_m3u8 = m3u8_analyze(m3u8_url)
-    flst = batch_down(real_m3u8, download_dir, thread, timeout)
+    flst = batch_down(real_m3u8, download_dir, thread, timeout, promod)
     merge(flst, mmpeg_path, download_dir, filename)
