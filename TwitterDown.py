@@ -33,7 +33,7 @@ def save_cookie():
     chrome_options = Options()
     chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
     chrome_options.add_argument('--ignore-certificate-errors')
-    chrome_options.add_argument('--disable-gpu')
+    #chrome_options.add_argument('--disable-gpu')
     driver = webdriver.Chrome(executable_path=os.getcwd() + "\\venv\\Lib\\site-packages\\chromedriver.exe",
                               options=chrome_options)
     try:
@@ -69,9 +69,10 @@ def save_cookie():
             value = cookie['value']
             dic[key] = value
     finally:
-        driver.close()
+        driver.quit()
 
 
+@retry
 def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
     if not chrome_path or not os.path.exists(chrome_path):
         raise RuntimeError('Invalid Chrome Driver Path.')
@@ -81,33 +82,34 @@ def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
     m3u8_add = None
     caps = DesiredCapabilities.CHROME
     caps['loggingPrefs'] = {'performance': 'ALL'}
+    caps["pageLoadStrategy"] = "none"
     chrome_options = Options()
     chrome_options.add_argument('--ignore-certificate-errors')
     chrome_options.add_experimental_option('w3c', False)
     chrome_options.add_argument('lang=zh_CN.UTF-8')
     chrome_options.add_argument('user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.113 Safari/537.36"')
-    chrome_options.add_argument('--headless')
+    #chrome_options.add_argument('--headless')
     try:
         driver = webdriver.Chrome(executable_path=chrome_path,
                                   options=chrome_options, desired_capabilities=caps)
         driver.get(baseurl)
-        try:
-            element = WebDriverWait(driver, 3).until(
-                ec.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div['
-                                                          '1]/div/div/div/section/div/div/div/div['
-                                                          '1]/div/div/div/article/div/div[3]/div[2]/div/div/div['
-                                                          '2]/div/article/div/div/div/div[2]/div/div['
-                                                          '2]/div/div/span/span'))
-            )
-            element.click()
-        except Exception:
-            pass
         while not m3u8_add:
             logs = [json.loads(log['message'])['message']['params'].get('request') for log in driver.get_log('performance')]
             m3u8_add = [x.get('url') for x in logs if x and 'm3u8' in x.get('url') in x.get('url')]
+            try:
+                element = WebDriverWait(driver, 1).until(
+                    ec.presence_of_element_located(
+                        (By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div['
+                                   '1]/div/div/div/section/div/div/div/div['
+                                   '1]/div/div/div/article/div/div[3]/div[2]/div/div/div['
+                                   '2]/div/article/div/div/div/div[2]/div/div['
+                                   '2]/div/div/span/span'))
+                )
+                element.click()
+            except Exception:
+                pass
         return m3u8_add
     finally:
-        driver.close()
         driver.quit()
 
 
@@ -128,9 +130,9 @@ def m3u8_analyze(url):
     return m3u8_add
 
 
-def get_ts_lst(opener, url):
+def get_ts_lst(myopener, url):
     tslst = []
-    doc = get_resp(opener, url)
+    doc = get_resp(myopener, url)
     file_line = doc.split("\n")
     for index, line in enumerate(file_line):  # 第二层
         if "EXTINF" in line:  # 找ts地址并下载
@@ -146,7 +148,7 @@ def get_ts_lst(opener, url):
 
 
 @retry
-def download_file(opener, ts, fname, tout):
+def download_file(myopener, ts, fname, tout):
     ssize = 0
     res = ''
     try:
@@ -154,7 +156,7 @@ def download_file(opener, ts, fname, tout):
         res.raise_for_status()
     except Exception as e:
         print(e)
-    size = get_file_size(opener, ts, tout)
+    size = get_file_size(myopener, ts, tout)
     with open(fname, 'wb') as f:
         for chunk in res.iter_content(chunk_size=256000):
             if chunk:
@@ -167,7 +169,7 @@ def download_file(opener, ts, fname, tout):
     return fname
 
 
-def batch_down(opener, url, mydir, cnt, tout, promode=False):
+def batch_down(myopener, url, mydir, cnt, tout, promode=False):
     ath = []
     if promode:
         backth = 2
@@ -176,43 +178,38 @@ def batch_down(opener, url, mydir, cnt, tout, promode=False):
     if not os.path.exists(mydir):
         os.makedirs(mydir)
     else:
-        tslst = get_ts_lst(opener, url)
+        tslst = get_ts_lst(myopener, url)
         for ts in tslst:
             while threading.active_count() > cnt:
                 print('\r达到最大线程限制,等待已有线程完成!\n', end='')
-                time.sleep(1)
+                time.sleep(5)
                 gen_process(len(fth), len(tslst))
-                #print('\r{:^5}'.format('继续下载！'))
             else:
                 if len(ath) > cnt:
                     for x in ath:
                         x.setDaemon(True)
                         x.start()
-                        x.join()
                 else:
                     tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
                     filepath = mydir + '\\' + tsname
-                    t = threading.Thread(target=download_file, args=(opener, ts, filepath, tout,))
-                    #print("Downloading File: " + filepath)
+                    t = threading.Thread(target=download_file, args=(myopener, ts, filepath, tout,))
                     ath.append(t)
                     fth.append(filepath)
         for x in ath:
             x.setDaemon(True)
             x.start()
-            x.join()
         while threading.active_count() > backth:
             print('\r还剩一点工作,剩余线程数 %s\n' % str(threading.active_count()).zfill(2), end='')
-            gen_process(len(fth), len(tslst))
-            time.sleep(1)
-        gen_process(len(fth), len(tslst))
+            time.sleep(5)
         print('下载完成,开始合并...')
     return fth
 
 
-def gen_process(cur, all):
-    pro = Decimal(cur*100/all).quantize(Decimal("0.00"))
-    if pro>0:
-        print(f'{pro}%')
+def gen_process(cur, tot):
+    pro = Decimal(cur*100/tot).quantize(Decimal("0.00"))
+    nm = Decimal(0.01).quantize(Decimal("0.00"))
+    if pro > 0:
+        print(f'{pro-nm} %')
 
 
 def ungzip(data):
@@ -230,16 +227,16 @@ def undeflate(data):
     (the zlib compression is used.)
     """
     import zlib
-    decompressobj = zlib.decompressobj(-zlib.MAX_WBITS)
-    return decompressobj.decompress(data) + decompressobj.flush()
+    decompressor = zlib.decompressobj(-zlib.MAX_WBITS)
+    return decompressor.decompress(data) + decompressor.flush()
 
 
 def set_opener():
     cookie = cookiejar.CookieJar()
     handler = request.HTTPCookieProcessor(cookie)
-    opener = request.build_opener(handler)
-    request.install_opener(opener)
-    return opener
+    myopener = request.build_opener(handler)
+    request.install_opener(myopener)
+    return myopener
 
 
 def clean_file(path, ext):
@@ -248,13 +245,13 @@ def clean_file(path, ext):
             os.remove(infile)
 
 
-def get_file_size(opener, url, tout):
-    ts = opener.open(url, timeout=tout)
+def get_file_size(myopener, url, tout):
+    ts = myopener.open(url, timeout=tout)
     return ts.headers["Content-Length"]
 
 
-def get_resp(opener, url):
-    response = opener.open(url, timeout=3)
+def get_resp(myopener, url):
+    response = myopener.open(url, timeout=3)
     data = response.read()
     if response.info().get('Content-Encoding') == 'gzip':
         data = ungzip(data)
@@ -265,12 +262,12 @@ def get_resp(opener, url):
     return doc
 
 
-def merge(flist, downdir, fname, exepath = os.getcwd() + '\\ffmpeg-win64-static\\bin\\ffmpeg.exe'):
+def merge(flist, downdir, fname, exepath=os.getcwd() + '\\ffmpeg-win64-static\\bin\\ffmpeg.exe'):
     if not exepath or not os.path.exists(exepath):
         raise RuntimeError('Invalid MMPEG Path.')
     idxfile = downdir + '\\' + 'index.tmp'
     with open(idxfile, 'w') as f:
-        f.write('file \'' + '\'\nfile \''.join(sorted(set(flist), key=lambda x: flist[-8:-3])) + '\'')
+        f.write('file \'' + '\'\nfile \''.join(flist) + '\'')
     fullfile = downdir + '\\' + fname
     if os.path.exists(fullfile):
         os.remove(fullfile)
@@ -282,10 +279,6 @@ def merge(flist, downdir, fname, exepath = os.getcwd() + '\\ffmpeg-win64-static\
 
 
 def generate_random_str(randomlength):
-    '''
-    string.digits = 0123456789
-    string.ascii_letters = 26个小写,26个大写
-    '''
     str_list = random.sample(string.digits + string.ascii_letters, randomlength)
     random_str = ''.join(str_list)
     return random_str
@@ -294,15 +287,12 @@ def generate_random_str(randomlength):
 if __name__ == "__main__":
     play_url = 'https://twitter.com/i/events/1251849186913341442'
     download_dir = 'E:\\download_test'
-    # = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
-    #chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
-    promod = True
     thread = 20
     timeout = 1
     filename = generate_random_str(randomlength=20) + '.mp4'
     opener = set_opener()
     m3u8_url = cap_m3u8(play_url)[0]
     real_m3u8 = m3u8_analyze(m3u8_url)
-    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promode=promod)
+    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
+    #flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promode=True)
     merge(flst, download_dir, filename)
-
