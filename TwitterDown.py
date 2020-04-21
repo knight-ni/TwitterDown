@@ -29,49 +29,6 @@ def clean_dir(downdir):
     os.makedirs(downdir)
 
 
-def save_cookie():
-    chrome_options = Options()
-    chrome_options.add_experimental_option('excludeSwitches', ['enable-automation'])
-    chrome_options.add_argument('--ignore-certificate-errors')
-    #chrome_options.add_argument('--disable-gpu')
-    driver = webdriver.Chrome(executable_path=os.getcwd() + "\\venv\\Lib\\site-packages\\chromedriver.exe",
-                              options=chrome_options)
-    try:
-        driver.get('https://www.youku.com')
-        time.sleep(2)
-        driver.find_element_by_xpath('//*[@id="uerCenter"]/div[6]/div[1]/div/a/img[1]').click()
-        time.sleep(1)
-        logframe = driver.find_element_by_tag_name('iframe')
-        time.sleep(1)
-        driver.switch_to.frame(logframe)
-        time.sleep(1)
-        driver.find_element_by_xpath('//*[@id="login-form"]/div[1]/a').click()
-        time.sleep(1)
-        pwd_input = driver.find_element_by_id("fm-login-password")
-        time.sleep(1)
-        for p in 'P@nd@knight123':
-            pwd_input.send_keys(p)
-        time.sleep(1)
-        user_input = driver.find_element_by_id("fm-login-id")
-        time.sleep(1)
-        for s in '18625157810':
-            user_input.send_keys(s)
-        time.sleep(1)
-        login_btn = driver.find_element_by_class_name("fm-button" and "fm-submit" and "password-login")
-        time.sleep(2)
-        login_btn.click()
-        time.sleep(2)
-        dic = {}
-        cookies = driver.get_cookies()
-        for cookie in cookies:
-            # print(cookie)
-            key = cookie['name']
-            value = cookie['value']
-            dic[key] = value
-    finally:
-        driver.quit()
-
-
 @retry
 def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
     if not chrome_path or not os.path.exists(chrome_path):
@@ -88,7 +45,7 @@ def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
     chrome_options.add_experimental_option('w3c', False)
     chrome_options.add_argument('lang=zh_CN.UTF-8')
     chrome_options.add_argument('user-agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.113 Safari/537.36"')
-    #chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--headless')
     try:
         driver = webdriver.Chrome(executable_path=chrome_path,
                                   options=chrome_options, desired_capabilities=caps)
@@ -180,6 +137,7 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
     else:
         tslst = get_ts_lst(myopener, url)
         for ts in tslst:
+            topener = set_opener()
             while threading.active_count() > cnt:
                 print('\r达到最大线程限制,等待已有线程完成!\n', end='')
                 time.sleep(5)
@@ -192,7 +150,7 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
                 else:
                     tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
                     filepath = mydir + '\\' + tsname
-                    t = threading.Thread(target=download_file, args=(myopener, ts, filepath, tout,))
+                    t = threading.Thread(target=download_file, args=(topener, ts, filepath, tout,))
                     ath.append(t)
                     fth.append(filepath)
         for x in ath:
@@ -203,6 +161,7 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
             time.sleep(5)
         print('下载完成,开始合并...')
     return fth
+
 
 
 def gen_process(cur, tot):
@@ -235,7 +194,7 @@ def set_opener():
     cookie = cookiejar.CookieJar()
     handler = request.HTTPCookieProcessor(cookie)
     myopener = request.build_opener(handler)
-    request.install_opener(myopener)
+    #request.install_opener(myopener)
     return myopener
 
 
