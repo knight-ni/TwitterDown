@@ -76,6 +76,8 @@ def save_cookie():
 def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
     if not chrome_path or not os.path.exists(chrome_path):
         raise RuntimeError('Invalid Chrome Driver Path.')
+    elif not baseurl:
+        raise RuntimeError('URL Needed.')
     driver = None
     m3u8_add = None
     caps = DesiredCapabilities.CHROME
@@ -157,7 +159,7 @@ def download_file(opener, ts, fname, tout):
         print(e)
     size = get_file_size(opener, ts, tout)
     with open(fname, 'wb') as f:
-        for chunk in res.iter_content(chunk_size=4096000):
+        for chunk in res.iter_content(chunk_size=256000):
             if chunk:
                 f.write(chunk)
                 f.flush()
@@ -171,44 +173,50 @@ def download_file(opener, ts, fname, tout):
 
 
 def batch_down(opener, url, mydir, cnt, tout, promode=False):
+    ath = []
     if promode:
         backth = 2
     else:
         backth = 1
-    ath = []
     if not os.path.exists(mydir):
         os.makedirs(mydir)
     else:
         tslst = get_ts_lst(opener, url)
         for ts in tslst:
-            while threading.active_count() >= cnt:
-                for i in range(tout, 0, -1):
-                    gen_process(len(fth), len(tslst))
-                    print('\r达到最大线程,进入等待计时,剩余%s秒!\n' % str(i).zfill(2), end='')
-                    time.sleep(1)
-                print('\r{:^5}'.format('继续下载！'))
-                for x in ath:
-                    x.join()
-                ath = []
+            while threading.active_count() > cnt:
+                print('\r达到最大线程限制,等待已有线程完成!\n', end='')
+                time.sleep(1)
+                gen_process(len(fth), len(tslst))
+                #print('\r{:^5}'.format('继续下载！'))
             else:
-                tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
-                filepath = mydir + '\\' + tsname
-                t = threading.Thread(target=download_file, args=(opener, ts, filepath, tout,))
-                t.start()
-                #print("Downloading File: " + filepath)
-                ath.append(t)
+                if len(ath) > cnt:
+                    for x in ath:
+                        x.setDaemon(True)
+                        x.start()
+                        x.join()
+                else:
+                    tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
+                    filepath = mydir + '\\' + tsname
+                    t = threading.Thread(target=download_file, args=(opener, ts, filepath, tout,))
+                    # print("Downloading File: " + filepath)
+                    ath.append(t)
+        for x in ath:
+            x.setDaemon(True)
+            x.start()
+            x.join()
         while threading.active_count() > backth:
+            print('\r还剩一点工作,剩余线程数 %s\n' % str(threading.active_count()).zfill(2), end='')
             gen_process(len(fth), len(tslst))
-            print('\r等待线程工作,剩余线程数%s\n' % str(threading.active_count()).zfill(2), end='')
             time.sleep(1)
-        else:
-            print('\n下载完成,开始合并...')
+        gen_process(len(fth), len(tslst))
+        print('\n下载完成,开始合并...')
     return lth
 
 
 def gen_process(cur, all):
     pro = Decimal(cur*100/all).quantize(Decimal("0.00"))
-    print(f'{pro}%')
+    if pro>0:
+        print(f'{pro}%')
 
 
 def ungzip(data):
@@ -288,17 +296,17 @@ def generate_random_str(randomlength):
 
 
 if __name__ == "__main__":
-    play_url = ''
+    play_url = 'https://twitter.com/i/events/1251849186913341442'
     download_dir = 'E:\\download_test'
     # = 'D:\\TwitterDown\\ffmpeg-win64-static\\bin\\ffmpeg.exe'
     #chrome_path = 'D:\\TwitterDown\\chromedriver.exe'
-    #promod = True
+    promod = True
     thread = 20
     timeout = 1
     filename = generate_random_str(randomlength=20) + '.mp4'
     opener = set_opener()
     m3u8_url = cap_m3u8(play_url)[0]
     real_m3u8 = m3u8_analyze(m3u8_url)
-    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
+    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promode=promod)
     merge(flst, download_dir, filename)
 
