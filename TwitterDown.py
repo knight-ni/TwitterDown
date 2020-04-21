@@ -20,7 +20,6 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
 
-lth = []
 fth = []
 
 
@@ -93,7 +92,7 @@ def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
                                   options=chrome_options, desired_capabilities=caps)
         driver.get(baseurl)
         try:
-            element = WebDriverWait(driver, 5).until(
+            element = WebDriverWait(driver, 3).until(
                 ec.presence_of_element_located((By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div['
                                                           '1]/div/div/div/section/div/div/div/div['
                                                           '1]/div/div/div/article/div/div[3]/div[2]/div/div/div['
@@ -150,8 +149,6 @@ def get_ts_lst(opener, url):
 def download_file(opener, ts, fname, tout):
     ssize = 0
     res = ''
-    if ts not in lth:
-        lth.append(fname)
     try:
         res = requests.get(ts, stream=True)
         res.raise_for_status()
@@ -167,8 +164,6 @@ def download_file(opener, ts, fname, tout):
     if size and not int(size) == ssize:
         print('EOFError,Download Again...\n')
         raise
-    else:
-        fth.append(fname)
     return fname
 
 
@@ -198,8 +193,9 @@ def batch_down(opener, url, mydir, cnt, tout, promode=False):
                     tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
                     filepath = mydir + '\\' + tsname
                     t = threading.Thread(target=download_file, args=(opener, ts, filepath, tout,))
-                    # print("Downloading File: " + filepath)
+                    #print("Downloading File: " + filepath)
                     ath.append(t)
+                    fth.append(filepath)
         for x in ath:
             x.setDaemon(True)
             x.start()
@@ -209,8 +205,8 @@ def batch_down(opener, url, mydir, cnt, tout, promode=False):
             gen_process(len(fth), len(tslst))
             time.sleep(1)
         gen_process(len(fth), len(tslst))
-        print('\n下载完成,开始合并...')
-    return lth
+        print('下载完成,开始合并...')
+    return fth
 
 
 def gen_process(cur, all):
