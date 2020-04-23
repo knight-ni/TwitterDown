@@ -1,0 +1,21 @@
+Metadata-Version: 2.1
+Name: pyaria2
+Version: 0.1.1
+Summary: a naive aria2c rpc api lib
+Home-page: https://bitbucket.org/tinyproxy/pyaria2
+Author: hschen
+Author-email: pypi@haisong.me
+License: UNKNOWN
+Description: # pyaria2
+        
+        ## Description
+        > A naive aria2c rpc api lib.
+        
+        ## License
+        > MIT.
+        
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Description-Content-Type: text/markdown

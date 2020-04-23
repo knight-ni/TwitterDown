@@ -1,5 +1,6 @@
 # -*- coding:'utf-8' -*-
 import os
+import sys
 import json
 import random
 import shutil
@@ -13,12 +14,11 @@ import glob
 from retrying import retry
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
+from bs4 import BeautifulSoup
+from pyaria2 import Aria2RPC
 
 fth = []
 
@@ -27,6 +27,28 @@ def clean_dir(downdir):
     if os.path.exists(downdir):
         shutil.rmtree(downdir)
     os.makedirs(downdir)
+
+
+def cap_vedio(baseurl):
+    links = []
+    tarurl = 'https://www.savetweetvid.com/zh/downloader'
+    mydata = {
+        "url": baseurl
+    }
+    response = requests.post(tarurl, mydata).text
+    bs = BeautifulSoup(response, features="lxml")
+    trs = bs.find('tbody').findAll('tr')
+    for tr in trs:
+        tds = tr.findAll('td')
+        info = []
+        for td in tds:
+            hf = td.find('a', href=True)
+            if not hf:
+                info.append(td.text.replace(' MB',''))
+            else:
+                info.append(hf['href'])
+        links.append(info)
+    return sorted(links, key=lambda x: x[3], reverse=True)[0]
 
 
 @retry
@@ -50,18 +72,14 @@ def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
         driver = webdriver.Chrome(executable_path=chrome_path,
                                   options=chrome_options, desired_capabilities=caps)
         driver.get(baseurl)
+
         while not m3u8_add:
             logs = [json.loads(log['message'])['message']['params'].get('request') for log in driver.get_log('performance')]
             m3u8_add = [x.get('url') for x in logs if x and 'm3u8' in x.get('url') in x.get('url')]
             try:
-                element = WebDriverWait(driver, 1).until(
-                    ec.presence_of_element_located(
-                        (By.XPATH, '//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div['
-                                   '1]/div/div/div/section/div/div/div/div['
-                                   '1]/div/div/div/article/div/div[3]/div[2]/div/div/div['
-                                   '2]/div/article/div/div/div/div[2]/div/div['
-                                   '2]/div/div/span/span'))
-                )
+                driver.execute_script("window.scrollTo(0, 0)")
+                #doc = driver.execute_script("return document.documentElement.outerHTML")
+                element = driver.find_element_by_xpath('//*[@id="react-root"]/div/div/div[2]/main/div/div/div/div/div/div/div/section/div/div/div[1]/div/div/div/article/div/div[3]/div[2]/div/div/div[2]/div/article/div/div/div/div[2]/div/div[2]/div/div/span/span')
                 element.click()
             except Exception:
                 pass
@@ -102,6 +120,12 @@ def get_ts_lst(myopener, url):
             else:
                 tslst.append(file_line[index + 1])
     return tslst
+
+
+def download_by_aria2(mydir, filename, link, thread, bufsize):
+    exe_path = os.getcwd() + '\\aria2-win-64bit\\aria2c.exe'
+    order = exe_path + ' -d ' + mydir + ' -o ' + filename + ' -s ' + str(thread) + ' -x ' + str(thread) + ' -k ' + bufsize + ' ' + link
+    os.system(order)
 
 
 @retry
@@ -145,8 +169,9 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
             else:
                 if len(ath) > cnt:
                     for x in ath:
-                        x.setDaemon(True)
-                        x.start()
+                        if not x.isDaemon():
+                            x.setDaemon(True)
+                            x.start()
                 else:
                     tsname = ts.split('/')[-1].split('.ts')[0] + '.ts'
                     filepath = mydir + '\\' + tsname
@@ -154,8 +179,9 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
                     ath.append(t)
                     fth.append(filepath)
         for x in ath:
-            x.setDaemon(True)
-            x.start()
+            if not x.isDaemon():
+                x.setDaemon(True)
+                x.start()
         while threading.active_count() > backth:
             print('\r还剩一点工作,剩余线程数 %s\n' % str(threading.active_count()).zfill(2), end='')
             time.sleep(5)
@@ -244,14 +270,17 @@ def generate_random_str(randomlength):
 
 
 if __name__ == "__main__":
-    play_url = 'https://twitter.com/i/events/1251849186913341442'
-    download_dir = 'E:\\download_test'
-    thread = 20
-    timeout = 1
-    filename = generate_random_str(randomlength=20) + '.mp4'
     opener = set_opener()
-    m3u8_url = cap_m3u8(play_url)[0]
-    real_m3u8 = m3u8_analyze(m3u8_url)
-    flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
+    play_url = 'https://twitter.com/TAN3730/status/1252460255889354752'
+    link = cap_vedio(play_url)[3]
+    download_dir = 'E:\\download_test'
+    thread = 10
+    timeout = 1
+    bufsize = '1M'
+    filename = generate_random_str(randomlength=20) + '.mp4'
+    download_by_aria2(download_dir, filename, link, thread, bufsize)
+    #m3u8_url = cap_m3u8(play_url)[0]
+    #real_m3u8 = m3u8_analyze(m3u8_url)
+    #flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
     #flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promode=True)
-    merge(flst, download_dir, filename)
+    #merge(flst, download_dir, filename)
