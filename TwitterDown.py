@@ -29,6 +29,7 @@ def clean_dir(downdir):
     os.makedirs(downdir)
 
 
+@retry
 def cap_vedio(baseurl):
     links = []
     tarurl = 'https://www.savetweetvid.com/zh/downloader'
