@@ -45,11 +45,11 @@ def cap_vedio(baseurl):
         for td in tds:
             hf = td.find('a', href=True)
             if not hf:
-                info.append(td.text.replace(' MB',''))
+                info.append(td.text.replace(' MB', ''))
             else:
                 info.append(hf['href'])
         links.append(info)
-    return sorted(links, key=lambda x: x[3], reverse=True)[0]
+    return sorted(links, key=lambda x: x[2], reverse=True)[0]
 
 
 @retry
@@ -126,28 +126,33 @@ def get_ts_lst(myopener, url):
 def download_by_curl(mydir, filename, link, thread, bufsize):
     ath = []
     fth = []
+    ssize = 0
     exe_path = os.getcwd() + '\\curl-7.69.1-win64-mingw\\bin\curl'
     myopener = set_opener()
     fsize = get_file_size(myopener, link)
     frags = [[i, i + bufsize - 1] if i <= (fsize - bufsize) else [i, fsize] for i in range(0, fsize, bufsize)]
+    fname = mydir + '\\' + filename
+    print('downloading ' + fname)
     for idx, i in enumerate(frags):
         while len(ath) >= thread:
             for x in ath:
                 if x.poll() == 0:
+                    ssize = ssize + (i[1] - i[0])
                     ath.remove(x)
+                    gen_process(ssize, fsize)
             time.sleep(2)
         else:
-            fname = mydir + '\\' + filename + '.' + str(idx)
-            curlcmd = exe_path + ' -s -o ' + fname + ' -r ' + str(i[0]) + '-' + str(i[1]) + ' ' + link
+            tfname = fname + '.' + str(idx)
+            curlcmd = exe_path + ' -s -o ' + tfname + ' -r ' + str(i[0]) + '-' + str(i[1]) + ' ' + link
             object = subprocess.Popen(curlcmd, shell=True, close_fds=True)
-            print('downloading ' + fname)
-            fth.append(fname)
+            fth.append(tfname)
             ath.append(object)
     while len(ath) > 0:
         for x in ath:
             if x.poll() == 0:
-                #print(str(x.pid) + ' finished.')
+                ssize = ssize + (i[1] - i[0])
                 ath.remove(x)
+                gen_process(ssize, fsize)
         time.sleep(2)
     return fth
 
@@ -254,7 +259,7 @@ def clean_file(path, ext):
             os.remove(infile)
 
 
-def get_file_size(myopener, url, tout=5):
+def get_file_size(myopener, url):
     ts = myopener.open(url)
     return int(ts.headers["Content-Length"])
 
@@ -292,8 +297,9 @@ def merge_by_file(flist, downdir, fname):
     if os.path.exists(fullfile):
         os.remove(fullfile)
     with open(fullfile, 'ab') as f:
+        print('merging file.')
         for l in flist:
-            print('merging file:' + l)
+            #print('merging file:' + l)
             with open(l, 'rb') as f1:
                 f.write(f1.read())
             os.remove(l)
