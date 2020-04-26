@@ -272,7 +272,7 @@ def generate_random_str(randomlength):
 
 if __name__ == "__main__":
     opener = set_opener()
-    play_url = 'https://twitter.com/TAN3730/status/1252460255889354752'
+    play_url = ''
     link = cap_vedio(play_url)[3]
     download_dir = 'E:\\download_test'
     thread = 10
