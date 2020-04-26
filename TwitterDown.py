@@ -1,5 +1,6 @@
 # -*- coding:'utf-8' -*-
 import os
+import subprocess
 import sys
 import json
 import random
@@ -18,7 +19,6 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
 from bs4 import BeautifulSoup
-from pyaria2 import Aria2RPC
 
 fth = []
 
@@ -123,10 +123,33 @@ def get_ts_lst(myopener, url):
     return tslst
 
 
-def download_by_aria2(mydir, filename, link, thread, bufsize):
-    exe_path = os.getcwd() + '\\aria2-win-64bit\\aria2c.exe'
-    order = exe_path + ' -d ' + mydir + ' -o ' + filename + ' -s ' + str(thread) + ' -x ' + str(thread) + ' -k ' + bufsize + ' ' + link
-    os.system(order)
+def download_by_curl(mydir, filename, link, thread, bufsize):
+    ath = []
+    fth = []
+    exe_path = os.getcwd() + '\\curl-7.69.1-win64-mingw\\bin\curl'
+    myopener = set_opener()
+    fsize = get_file_size(myopener, link)
+    frags = [[i, i + bufsize - 1] if i <= (fsize - bufsize) else [i, fsize] for i in range(0, fsize, bufsize)]
+    for idx, i in enumerate(frags):
+        while len(ath) >= thread:
+            for x in ath:
+                if x.poll() == 0:
+                    ath.remove(x)
+            time.sleep(2)
+        else:
+            fname = mydir + '\\' + filename + '.' + str(idx)
+            curlcmd = exe_path + ' -s -o ' + fname + ' -r ' + str(i[0]) + '-' + str(i[1]) + ' ' + link
+            object = subprocess.Popen(curlcmd, shell=True, close_fds=True)
+            print('downloading ' + fname)
+            fth.append(fname)
+            ath.append(object)
+    while len(ath) > 0:
+        for x in ath:
+            if x.poll() == 0:
+                #print(str(x.pid) + ' finished.')
+                ath.remove(x)
+        time.sleep(2)
+    return fth
 
 
 @retry
@@ -231,9 +254,9 @@ def clean_file(path, ext):
             os.remove(infile)
 
 
-def get_file_size(myopener, url, tout):
-    ts = myopener.open(url, timeout=tout)
-    return ts.headers["Content-Length"]
+def get_file_size(myopener, url, tout=5):
+    ts = myopener.open(url)
+    return int(ts.headers["Content-Length"])
 
 
 def get_resp(myopener, url):
@@ -248,7 +271,7 @@ def get_resp(myopener, url):
     return doc
 
 
-def merge(flist, downdir, fname, exepath=os.getcwd() + '\\ffmpeg-win64-static\\bin\\ffmpeg.exe'):
+def merge_by_ffpeg(flist, downdir, fname, exepath=os.getcwd() + '\\ffmpeg-win64-static\\bin\\ffmpeg.exe'):
     if not exepath or not os.path.exists(exepath):
         raise RuntimeError('Invalid MMPEG Path.')
     idxfile = downdir + '\\' + 'index.tmp'
@@ -261,6 +284,20 @@ def merge(flist, downdir, fname, exepath=os.getcwd() + '\\ffmpeg-win64-static\\b
                 outputs={fullfile: '-c copy '})
     ff.run()
     clean_file(downdir, ['ts', 'tmp'])
+    return 0
+
+
+def merge_by_file(flist, downdir, fname):
+    fullfile = downdir + '\\' + fname
+    if os.path.exists(fullfile):
+        os.remove(fullfile)
+    with open(fullfile, 'ab') as f:
+        for l in flist:
+            print('merging file:' + l)
+            with open(l, 'rb') as f1:
+                f.write(f1.read())
+            os.remove(l)
+        f.flush()
     return 0
 
 
@@ -277,11 +314,12 @@ if __name__ == "__main__":
     download_dir = 'E:\\download_test'
     thread = 10
     timeout = 1
-    bufsize = '1M'
+    bufsize = 1024000
     filename = generate_random_str(randomlength=20) + '.mp4'
-    download_by_aria2(download_dir, filename, link, thread, bufsize)
+    flst = download_by_curl(download_dir, filename, link, thread, bufsize)
+    merge_by_file(flst, download_dir, filename)
     #m3u8_url = cap_m3u8(play_url)[0]
     #real_m3u8 = m3u8_analyze(m3u8_url)
     #flst = batch_down(opener, real_m3u8, download_dir, thread, timeout)
     #flst = batch_down(opener, real_m3u8, download_dir, thread, timeout, promode=True)
-    #merge(flst, download_dir, filename)
+
