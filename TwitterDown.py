@@ -19,6 +19,7 @@ from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
 from bs4 import BeautifulSoup
+from progressbar import *
 
 fth = []
 
@@ -29,7 +30,7 @@ def clean_dir(downdir):
     os.makedirs(downdir)
 
 
-@retry
+@retry(stop_max_attempt_number=3, wait_fixed=3000)
 def cap_vedio(baseurl):
     links = []
     tarurl = 'https://www.savetweetvid.com/zh/downloader'
@@ -38,21 +39,33 @@ def cap_vedio(baseurl):
     }
     response = requests.post(tarurl, mydata).text
     bs = BeautifulSoup(response, features="lxml")
-    trs = bs.find('tbody').findAll('tr')
-    for tr in trs:
-        tds = tr.findAll('td')
-        info = []
-        for td in tds:
-            hf = td.find('a', href=True)
-            if not hf:
-                info.append(td.text.replace(' MB', ''))
-            else:
-                info.append(hf['href'])
-        links.append(info)
+    body = bs.find('tbody')
+    if not body:
+        print('No URL Cathed.')
+        sys.exit()
+    else:
+        trs = body.findAll('tr')
+        for tr in trs:
+            tds = tr.findAll('td')
+            info = []
+            for td in tds:
+                hf = td.find('a', href=True)
+                if not hf:
+                    if 'MB' in td.text:
+                        info.append(Decimal(td.text.replace(' MB', '')).quantize(Decimal('0.00'))*1024)
+                    elif 'KB' in td.text:
+                        info.append(Decimal(td.text.replace(' KB', '')).quantize(Decimal('0.00')))
+                    elif 'GB' in td.text:
+                        info.append(Decimal(td.text.replace(' GB', '')).quantize(Decimal('0.00'))*1024*1024)
+                    else:
+                        info.append(td.text)
+                else:
+                    info.append(hf['href'])
+            links.append(info)
     return sorted(links, key=lambda x: x[2], reverse=True)[0]
 
 
-@retry
+@retry(stop_max_attempt_number=3, wait_fixed=3000)
 def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
     if not chrome_path or not os.path.exists(chrome_path):
         raise RuntimeError('Invalid Chrome Driver Path.')
@@ -122,25 +135,28 @@ def get_ts_lst(myopener, url):
                 tslst.append(file_line[index + 1])
     return tslst
 
-
+@retry(stop_max_attempt_number=3, wait_fixed=3000)
 def download_by_curl(mydir, filename, link, thread, bufsize):
     ath = []
     fth = []
     ssize = 0
     exe_path = os.getcwd() + '\\curl-7.69.1-win64-mingw\\bin\curl'
     myopener = set_opener()
-    fsize = get_file_size(myopener, link)
-    frags = [[i, i + bufsize - 1] if i <= (fsize - bufsize) else [i, fsize] for i in range(0, fsize, bufsize)]
     fname = mydir + '\\' + filename
-    print('downloading ' + fname)
+    fsize = get_file_size(myopener, link)
+    print('Downloading File: ' + filename)
+    widgets = ['Progress: ', Percentage(), ' ', Bar('#'), ' ', Timer(), ' ', FileTransferSpeed()]
+    bar = ProgressBar(widgets=widgets, maxval=fsize)
+    bar.start()
+    frags = [[i, i + bufsize - 1] if i <= (fsize - bufsize) else [i, fsize] for i in range(0, fsize, bufsize)]
     for idx, i in enumerate(frags):
         while len(ath) >= thread:
             for x in ath:
                 if x.poll() == 0:
-                    ssize = ssize + (i[1] - i[0])
+                    ssize += (i[1] - i[0])
+                    bar.update(ssize)
                     ath.remove(x)
-                    gen_process(ssize, fsize)
-            time.sleep(2)
+            time.sleep(0.5)
         else:
             tfname = fname + '.' + str(idx)
             curlcmd = exe_path + ' -s -o ' + tfname + ' -r ' + str(i[0]) + '-' + str(i[1]) + ' ' + link
@@ -150,15 +166,16 @@ def download_by_curl(mydir, filename, link, thread, bufsize):
     while len(ath) > 0:
         for x in ath:
             if x.poll() == 0:
-                ssize = ssize + (i[1] - i[0])
+                ssize += (i[1] - i[0])
+                bar.update(ssize)
                 ath.remove(x)
-                gen_process(ssize, fsize)
-        time.sleep(2)
+        time.sleep(0.5)
+    bar.finish()
     return fth
 
 
-@retry
-def download_file(myopener, ts, fname, tout):
+@retry(stop_max_attempt_number=3)
+def download_file(myopener, ts, fname, tout=5):
     ssize = 0
     res = ''
     try:
@@ -166,7 +183,7 @@ def download_file(myopener, ts, fname, tout):
         res.raise_for_status()
     except Exception as e:
         print(e)
-    size = get_file_size(myopener, ts, tout)
+    size = get_file_size(myopener, ts)
     with open(fname, 'wb') as f:
         for chunk in res.iter_content(chunk_size=256000):
             if chunk:
@@ -194,7 +211,6 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
             while threading.active_count() > cnt:
                 print('\r达到最大线程限制,等待已有线程完成!\n', end='')
                 time.sleep(5)
-                gen_process(len(fth), len(tslst))
             else:
                 if len(ath) > cnt:
                     for x in ath:
@@ -216,14 +232,6 @@ def batch_down(myopener, url, mydir, cnt, tout, promode=False):
             time.sleep(5)
         print('下载完成,开始合并...')
     return fth
-
-
-
-def gen_process(cur, tot):
-    pro = Decimal(cur*100/tot).quantize(Decimal("0.00"))
-    nm = Decimal(0.01).quantize(Decimal("0.00"))
-    if pro > 0:
-        print(f'{pro-nm} %')
 
 
 def ungzip(data):
@@ -259,8 +267,10 @@ def clean_file(path, ext):
             os.remove(infile)
 
 
+@retry(stop_max_attempt_number=3)
 def get_file_size(myopener, url):
     ts = myopener.open(url)
+    #print(url)
     return int(ts.headers["Content-Length"])
 
 
@@ -297,7 +307,7 @@ def merge_by_file(flist, downdir, fname):
     if os.path.exists(fullfile):
         os.remove(fullfile)
     with open(fullfile, 'ab') as f:
-        print('merging file.')
+        #print('merging file.')
         for l in flist:
             #print('merging file:' + l)
             with open(l, 'rb') as f1:
@@ -317,8 +327,9 @@ if __name__ == "__main__":
     opener = set_opener()
     play_url = ''
     link = cap_vedio(play_url)[3]
+    #link = 'https://video.twimg.com/ext_tw_video/1245739010044989442/pu/vid/480x320/Emt2Is5rPGIiyUlV.mp4?tag=10'
     download_dir = 'E:\\download_test'
-    thread = 10
+    thread = 20
     timeout = 1
     bufsize = 1024000
     filename = generate_random_str(randomlength=20) + '.mp4'
