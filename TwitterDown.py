@@ -1,5 +1,4 @@
 # -*- coding:'utf-8' -*-
-import os
 import subprocess
 import sys
 import json
@@ -7,7 +6,7 @@ import random
 import shutil
 import string
 import time
-from decimal import Decimal
+import twitter_parser
 from http import cookiejar
 from urllib import request
 from ffmpy3 import FFmpeg
@@ -18,7 +17,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.desired_capabilities import DesiredCapabilities
 import requests
 import threading
-from bs4 import BeautifulSoup
 from progressbar import *
 
 fth = []
@@ -32,38 +30,8 @@ def clean_dir(downdir):
 
 @retry(stop_max_attempt_number=3, wait_fixed=3000)
 def cap_vedio(baseurl):
-    links = []
-    tarurl = 'https://www.savetweetvid.com/zh/downloader'
-    mydata = {
-        "url": baseurl
-    }
-    response = requests.post(tarurl, mydata).text
-    bs = BeautifulSoup(response, features="lxml")
-    body = bs.find('tbody')
-    if not body:
-        print('No URL Cathed.')
-        sys.exit()
-    else:
-        trs = body.findAll('tr')
-        for tr in trs:
-            tds = tr.findAll('td')
-            info = []
-            for td in tds:
-                hf = td.find('a', href=True)
-                if not hf:
-                    if 'MB' in td.text:
-                        info.append(Decimal(td.text.replace(' MB', '')).quantize(Decimal('0.00'))*1024)
-                    elif 'KB' in td.text:
-                        info.append(Decimal(td.text.replace(' KB', '')).quantize(Decimal('0.00')))
-                    elif 'GB' in td.text:
-                        info.append(Decimal(td.text.replace(' GB', '')).quantize(Decimal('0.00'))*1024*1024)
-                    else:
-                        info.append(td.text)
-                else:
-                    info.append(hf['href'])
-            links.append(info)
-    return sorted(links, key=lambda x: x[2], reverse=True)[0]
-
+    urls = twitter_parser.twittervideodownloader(baseurl)
+    return urls
 
 @retry(stop_max_attempt_number=3, wait_fixed=3000)
 def cap_m3u8(baseurl, chrome_path=os.getcwd() + '\\chromedriver.exe'):
@@ -326,8 +294,7 @@ def generate_random_str(randomlength):
 if __name__ == "__main__":
     opener = set_opener()
     play_url = ''
-    link = cap_vedio(play_url)[3]
-    #link = 'https://video.twimg.com/ext_tw_video/1245739010044989442/pu/vid/480x320/Emt2Is5rPGIiyUlV.mp4?tag=10'
+    link = cap_vedio(play_url)
     download_dir = 'E:\\download_test'
     thread = 20
     timeout = 1
